@@ -1,0 +1,4 @@
+# Bootstrap Configuration
+org.springframework.cloud.bootstrap.BootstrapConfiguration=\
+net.conjur.config.ConjurConfiguration,\
+net.conjur.config.ConjurPropertySourceLocator
