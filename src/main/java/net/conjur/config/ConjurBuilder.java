@@ -12,6 +12,7 @@ import java.io.ByteArrayInputStream;
 import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.File;
+import java.io.IOException;
 import java.util.Map;
 import java.util.UUID;
 import org.apache.commons.codec.binary.Base64;
@@ -50,7 +51,9 @@ public class ConjurBuilder {
   //  - "annie"
   //  - "host/my-application"
   public ConjurBuilder identity(String _identity) {
-    this._identity = _identity;
+    if(this._identity == null) {
+      this._identity = _identity;
+    }
     return this;
   }
 
@@ -58,13 +61,23 @@ public class ConjurBuilder {
   // Takes the Conjur appliance URL as a string.
   // Ex: https://conjur.myorg.com/api
   public ConjurBuilder applianceUrl(String applianceUrl) {
-    _endpoints = Endpoints.getApplianceEndpoints(applianceUrl);
+    if(applianceUrl == null || applianceUrl.isEmpty()) {
+      return this;
+    }
+
+    if(this._endpoints == null) {
+      _endpoints = Endpoints.getApplianceEndpoints(applianceUrl);
+    }
     return this;
   }
 
   // certificate
   // Adds a string containing an x509 certificate to a temporary key store
   public ConjurBuilder certificate(String cert) {
+    if (cert == null || cert.isEmpty()) {
+      return this;
+    }
+
     try (ByteArrayInputStream bais = new ByteArrayInputStream(cert.getBytes()); 
          BufferedInputStream bis = new BufferedInputStream(bais)) {
       CertificateFactory cf = CertificateFactory.getInstance("X.509");
@@ -97,6 +110,10 @@ public class ConjurBuilder {
   // Reads a file containing an x509 certificate and adds it to a temporary
   // key store.
   public ConjurBuilder certificatePath(String path) {
+    if(path == null || path.isEmpty()) {
+      return this;
+    }
+
     try {
       this.certificate(new String(Files.readAllBytes(Paths.get(path))));
     }
@@ -107,21 +124,46 @@ public class ConjurBuilder {
     return this; 
   }
 
-  // configurationPath
-  // Reads a Conjur configuration YAML file and retrieves:
+  // mergeEnvironment
+  // Reads the process environment and retrieves (if not exists):
+  //  - appliance url
+  //  - certificate
+  //  - username
+  //  - api key
+  public ConjurBuilder mergeEnvironment() {
+    applianceUrl(System.getenv("CONJUR_APPLIANCE_URL"))
+    .certificatePath(System.getenv("CONJUR_CERT_FILE"))
+    .certificate(System.getenv("CONJUR_SSL_CERTIFICATE"))
+    .apiKey(System.getenv("CONJUR_AUTHN_API_KEY"))
+    .identity(System.getenv("CONJUR_AUTHN_LOGIN"));
+
+    return this;
+  }
+  // mergeConfigurationPath
+  // Reads a Conjur configuration YAML file and retrieves (if not exists):
   //  - appliance url
   //  - certificate
   //  - username (from netrc)
   //  - api key (from netrc)
-  public ConjurBuilder configurationPath(String path) {
+  public ConjurBuilder mergeConfigurationPath(String path, String netrcPath) {
     try { 
+      path = ConjurUtil.expandHome(path);
+
       String config = new String(Files.readAllBytes(Paths.get(path)));
       Yaml yaml = new Yaml();
       Map<String, String> configYaml = (Map)yaml.load(config);
 
+      String netrc = netrcPath;
+      if (netrc == null || netrc.isEmpty()) {
+        netrc = configYaml.get("netrc_path");
+      }
+
       applianceUrl(configYaml.get("appliance_url"))
         .certificatePath(configYaml.get("cert_file"))
-        .identityPath(configYaml.get("netrc_path"));
+        .identityPath(ConjurUtil.expandHome(netrc));
+    }
+    catch(IOException e) {
+      // File doesn't exist, it may have come from somewhere else
     }
     catch(Exception e) {
       e.printStackTrace();
@@ -134,9 +176,13 @@ public class ConjurBuilder {
   // Reads a netrc file containing a Conjur API key.
   // Requires an appliance url is previously known to the builder.
   public ConjurBuilder identityPath(String path) {
+
+    if(path == null || path.isEmpty()) {
+      return this;
+    }
+
     NetRC netrc = new NetRC(new File(path));
     NetRCEntry entry = netrc.getEntry(_endpoints.getAuthnUri().toString());
-
     return identity(entry.login)
       .apiKey(new String(entry.password));
   }
