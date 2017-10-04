@@ -1,7 +1,11 @@
 # spring-cloud-conjur
 Allows `@Value` population from an external Conjur service using machine identity.
 ## Installation
-This project is built with Maven. You can install it by running `mvn install` from the project's root directory.
+This project is built with Maven.  
+
+There is a currently a dependency on [Conjur's Java API](https://github.com/cyberark/conjur-api-java) from commit `f1136ea2`. This will need to be installed before installing.  
+
+You can install by running `mvn install` from the project's root directory. 
 
 ## Usage
 Install `spring-cloud-conjur` using Maven and add the following dependency to your `pom.xml`
